@@ -23,3 +23,12 @@ model = genai.GenerativeModel(
 )
 
 chat_session = model.start_chat(history=[])
+
+
+url = "https://brainlox.com/courses/category/technical"
+loader = WebBaseLoader(url)
+data = loader.load()
+
+
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+docs = text_splitter.split_documents(data)
