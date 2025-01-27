@@ -22,7 +22,7 @@ generation_config = {
 }
 
 model = genai.GenerativeModel(
-    model_name="gemini-2.0-pro-exp", 
+    model_name="gemini-2.0-flas-exp", 
     generation_config=generation_config,
 )
 
