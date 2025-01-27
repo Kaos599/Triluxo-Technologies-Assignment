@@ -1,12 +1,12 @@
 import os
 from flask import Flask, request
 from flask_restful import Resource, Api
-from langchain.document_loaders import WebBaseLoader
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
+from langchain_community.document_loaders import WebBaseLoader
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains import RetrievalQA
-from langchain.llms import GoogleGenerativeAI
+from langchain_community.llms import GoogleGenerativeAI
 from dotenv import load_dotenv
 
 load_dotenv()
