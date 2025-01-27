@@ -43,7 +43,7 @@ docs = text_splitter.split_documents(data)
 
 
 persist_directory = "chroma_db"
-embeddings = HuggingFaceEmbeddings(model_name = "mxbai-embed-large:latest") 
+embeddings = HuggingFaceEmbeddings(model_name = "all-MiniLM-L6-v2") 
 vector_store = Chroma.from_documents(
     documents=docs, embedding=embeddings, persist_directory=persist_directory
 )
