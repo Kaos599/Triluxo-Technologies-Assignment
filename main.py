@@ -6,6 +6,10 @@ from langchain.vectorstores import Chroma
 from langchain.embeddings import HuggingFaceEmbeddings
 from flask import Flask, request, jsonify
 from flask_restful import Api, Resource
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
