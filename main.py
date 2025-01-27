@@ -7,12 +7,8 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from flask import Flask, request, jsonify
 from flask_restful import Api, Resource
 
-
-
-# Configure Gemini API
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
-# Create the model
 generation_config = {
     "temperature": 1,
     "top_p": 0.95,
@@ -26,5 +22,4 @@ model = genai.GenerativeModel(
     generation_config=generation_config,
 )
 
-# Initialize chat session
 chat_session = model.start_chat(history=[])
