@@ -1,0 +1,13 @@
+{
+  "name": "triluxo-technologies-assignment",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "autopush": "git add . && git commit -m \"Auto-commit: Changes saved on $(date)\" && git push origin main"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
