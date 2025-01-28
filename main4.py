@@ -148,7 +148,6 @@ class ChatBot(Resource):
     @limiter.limit("10/minute")
     def post(self):
         """Enhanced chat endpoint with session management and context-aware responses"""
-        
         # Request validation
         data = request.get_json()
         user_input = data.get("message", "").strip()
