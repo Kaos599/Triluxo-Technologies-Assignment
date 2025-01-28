@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 
 try:
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    API_KEYS = os.getenv("API_KEYS", "").split(",")
 except Exception as e:
     logger.error(f"Configuration error: {e}")
     exit(1)
