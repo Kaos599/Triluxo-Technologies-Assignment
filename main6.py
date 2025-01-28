@@ -3,6 +3,7 @@ import logging
 import uuid
 from dotenv import load_dotenv
 import google.generativeai as genai
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
@@ -150,7 +151,7 @@ class CourseList(BaseModel):
 def run_browser_task(task, output_model, queue):
     """Function to run browser task in a separate process."""
     api_key = os.getenv("GEMINI_API_KEY") 
-    llm = genai.GenerativeModel(model=os.getenv("MODEL_NAME", "gemini-2.0-flash-exp")) 
+    llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash-exp', api_key=api_key)
     controller = Controller(output_model=output_model)
     agent = Agent(
         task=task,
