@@ -154,7 +154,7 @@ class CourseList(BaseModel):
 def run_browser_task(task, output_model, queue):
     """Function to run browser task in a separate process."""
     api_key = os.getenv("GEMINI_API_KEY")
-    llm = ChatGoogleGenerativeAI(model=os.getenv("BROWSER_LLM_MODEL", "gemini-1.5-flash"), api_key=api_key) # separate llm for browser agent
+    llm = ChatGoogleGenerativeAI(model=os.getenv("BROWSER_LLM_MODEL", "gemini-2.0-flash-exp"), api_key=api_key) # separate llm for browser agent
     controller = Controller(output_model=output_model)
     agent = Agent(
         task=task,
