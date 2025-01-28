@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 try:
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    
 except Exception as e:
     logger.error(f"Configuration error: {e}")
     exit(1)
@@ -43,11 +44,11 @@ generation_config = {
 }
 
 model = genai.GenerativeModel(
-    model_name=os.getenv("MODEL_NAME", "gemini-2.0-flash-exp"), # using a faster model for intent detection
+    model_name=os.getenv("MODEL_NAME", "gemini-2.0-flash-exp"), 
     generation_config=generation_config,
 )
 
-intent_model = genai.GenerativeModel( # separate model for response generation, can be a more powerful one
+intent_model = genai.GenerativeModel( 
     model_name=os.getenv("RESPONSE_MODEL_NAME", "gemini-1.5-flash"),
     generation_config=generation_config,
 )
@@ -66,7 +67,7 @@ def get_limiter_key():
 
 app = Flask(__name__)
 api = Api(app)
-limiter = Limiter(get_limiter_key, app=app, default_limits=["10 per minute"])
+limiter = Limiter(get_limiter_key, app=app, default_limits=["10 per minute"]) 
 cache = Cache(app, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 300})
 
 
@@ -153,7 +154,7 @@ class CourseList(BaseModel):
 def run_browser_task(task, output_model, queue):
     """Function to run browser task in a separate process."""
     api_key = os.getenv("GEMINI_API_KEY")
-    llm = ChatGoogleGenerativeAI(model=os.getenv("BROWSER_LLM_MODEL", "gemini-2.0-flash-exp"), api_key=api_key) # separate llm for browser agent
+    llm = ChatGoogleGenerativeAI(model=os.getenv("BROWSER_LLM_MODEL", "gemini-2.0-flash-exp"), api_key=api_key)
     controller = Controller(output_model=output_model)
     agent = Agent(
         task=task,
@@ -184,9 +185,14 @@ except Exception as e:
     exit(1)
 
 class ChatBot(Resource):
-    @limiter.limit("10/minute")
+    @limiter.limit("10/minute") 
     def post(self):
-        """Enhanced chat endpoint with session management and dynamic browser tasking"""
+        """Enhanced chat endpoint with session management and dynamic browser tasking - Authentication Removed"""
+
+        
+        
+        
+        
 
         data = request.get_json()
         user_input = data.get("message", "").strip()
@@ -199,14 +205,14 @@ class ChatBot(Resource):
         if not session_id or session_id not in sessions:
             session_id = str(uuid.uuid4())
             sessions[session_id] = {
-                "chat": intent_model.start_chat(history=[]), # Use intent_model for chat history
+                "chat": intent_model.start_chat(history=[]), 
                 "history": []
             }
 
         session = sessions[session_id]
 
         try:
-            # Determine if browser is needed and generate task dynamically
+            
             intent_prompt = f"""Determine if the user query requires using a web browser to find up-to-date information about technical courses on 'https://brainlox.com/courses/category/technical'.
 
             User Query: {user_input}
@@ -221,13 +227,13 @@ class ChatBot(Resource):
             Response (Browser Task or NO_BROWSER_TASK):
             """
 
-            intent_response = model.send_message(intent_prompt) # Use model (faster one) for intent determination
+            intent_response = model.send_message(intent_prompt) 
             browser_task_string = intent_response.text.strip()
             logger.info(f"Intent Model Response: {browser_task_string}")
 
 
             if browser_task_string.lower() != "no_browser_task":
-                # Dynamic browser task execution
+                
                 queue = Queue()
                 process = Process(target=run_browser_task, args=(browser_task_string, CourseList, queue))
 
@@ -249,11 +255,11 @@ class ChatBot(Resource):
                 return jsonify({
                  "response": bot_response,
                   "session_id": session_id,
-                   "sources": ["browser"] # Indicate browser as source
+                   "sources": ["browser"] 
                     })
 
 
-            else: # Proceed with vector store if no browser task is needed
+            else: 
                 relevant_docs = vector_store.similarity_search(user_input, k=3)
                 context = "\n".join([f"Source: {doc.metadata['source']}\n{doc.page_content}"
                                    for doc in relevant_docs])
@@ -267,7 +273,7 @@ class ChatBot(Resource):
                 Question: {user_input}
                 Helpful Answer:"""
 
-                response = session["chat"].send_message(prompt) # Use intent_model for chat
+                response = session["chat"].send_message(prompt) 
                 bot_response = response.text
 
                 session["history"].append((user_input, bot_response))
