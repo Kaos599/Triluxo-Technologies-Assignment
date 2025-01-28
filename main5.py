@@ -184,11 +184,6 @@ class ChatBot(Resource):
     def post(self):
         """Enhanced chat endpoint with session management and context-aware responses"""
         
-        api_key = request.headers.get("X-API-Key")
-        if not api_key or api_key not in API_KEYS:
-            return jsonify({"error": "Unauthorized"}), 401
-        
-        
         data = request.get_json()
         user_input = data.get("message", "").strip()
         session_id = data.get("session_id")
@@ -281,3 +276,11 @@ api.add_resource(HealthCheck, "/health")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=os.getenv("DEBUG", "false").lower() == "true")
+
+
+
+
+    curl -X POST \
+     -H "Content-Type: application/json" \
+     -d '{"message": "What are the courses available"}' \
+     http://localhost:5000/chat
