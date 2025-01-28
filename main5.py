@@ -280,7 +280,3 @@ if __name__ == "__main__":
 
 
 
-    curl -X POST \
-     -H "Content-Type: application/json" \
-     -d '{"message": "What are the courses available"}' \
-     http://localhost:5000/chat
