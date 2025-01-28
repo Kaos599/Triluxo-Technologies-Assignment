@@ -19,7 +19,6 @@ from browser_use import Agent, Controller
 from multiprocessing import Process, Queue
 from pydantic import BaseModel, Field
 from typing import List
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 load_dotenv()
 
@@ -28,30 +27,38 @@ logger = logging.getLogger(__name__)
 
 
 try:
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY")) 
 except Exception as e:
     logger.error(f"Configuration error: {e}")
     exit(1)
 
 
 
-generation_config = {
+generation_config_agent = { 
+  "temperature": 0.5, 
+  "top_p": 0.95,
+  "top_k": 40,
+  "max_output_tokens": 256, 
+}
+
+generation_config_chatbot = { 
     "temperature": float(os.getenv("TEMPERATURE", 0.7)),
     "top_p": float(os.getenv("TOP_P", 0.95)),
     "top_k": int(os.getenv("TOP_K", 40)),
     "max_output_tokens": int(os.getenv("MAX_OUTPUT_TOKENS", 8192)),
 }
 
-model = genai.GenerativeModel(
-    model_name=os.getenv("MODEL_NAME", "gemini-2.0-flash-exp"), 
-    generation_config=generation_config,
+
+agent_model = genai.GenerativeModel(
+  model_name=os.getenv("AGENT_MODEL_NAME", "gemini-2.0-flash-exp"), 
+  generation_config=generation_config_agent,
 )
 
-intent_model = genai.GenerativeModel( 
-    model_name=os.getenv("RESPONSE_MODEL_NAME", "gemini-2.0-flash-exp"),
-    generation_config=generation_config,
+chatbot_model = genai.GenerativeModel(
+    model_name=os.getenv("MODEL_NAME", "gemini-1.5-flash"), 
+    generation_config=generation_config_chatbot,
 )
+
 
 
 def get_limiter_key():
@@ -67,11 +74,12 @@ def get_limiter_key():
 
 app = Flask(__name__)
 api = Api(app)
-limiter = Limiter(get_limiter_key, app=app, default_limits=["10 per minute"]) 
+limiter = Limiter(get_limiter_key, app=app, default_limits=["10 per minute"])
 cache = Cache(app, config={"CACHE_TYPE": "SimpleCache", "CACHE_DEFAULT_TIMEOUT": 300})
 
 
 sessions = {}
+
 
 def load_data(url):
     """Enhanced data loader with HTML content extraction"""
@@ -84,8 +92,8 @@ def load_data(url):
         for doc in raw_docs:
             try:
                 soup = BeautifulSoup(doc.page_content, 'html.parser')
-
-                courses = soup.find_all('div', class_='course-card')
+                
+                courses = soup.find_all('div', class_='course-card')  
                 for course in courses:
                     try:
                         title = course.find('h3').get_text(strip=True)
@@ -143,6 +151,7 @@ def create_vector_store(docs):
         logger.error(f"Error creating or loading vector store: {e}")
         raise
 
+
 class Course(BaseModel):
     title: str
     description: str
@@ -153,8 +162,8 @@ class CourseList(BaseModel):
 
 def run_browser_task(task, output_model, queue):
     """Function to run browser task in a separate process."""
-    api_key = os.getenv("GEMINI_API_KEY")
-    llm = ChatGoogleGenerativeAI(model=os.getenv("BROWSER_LLM_MODEL", "gemini-2.0-flash-exp"), api_key=api_key)
+    api_key = os.getenv("GEMINI_API_KEY") 
+    llm = ChatGoogleGenerativeAI(model=os.getenv("MODEL_NAME", "gemini-1.5-flash"), api_key=api_key) 
     controller = Controller(output_model=output_model)
     agent = Agent(
         task=task,
@@ -173,6 +182,7 @@ def run_browser_task(task, output_model, queue):
         queue.put(None)
 
 
+
 try:
     urls = os.getenv("DATA_URLS", "https://brainlox.com/courses/category/technical").split(',')
     all_docs = []
@@ -184,16 +194,73 @@ except Exception as e:
     logger.error(f"Failed to initialize data pipeline: {e}")
     exit(1)
 
+
+
 class ChatBot(Resource):
-    @limiter.limit("10/minute") 
+    def __init__(self):
+        self.agent_chat_session = agent_model.start_chat(history=[]) 
+
+    def _determine_browser_task(self, user_input):
+        """
+        AI Agent to determine if a browser task is needed and formulate it.
+        """
+        try:
+            agent_prompt = f"""Determine if the user query requires browsing the web to answer.
+            If yes, formulate a concise browser task using 'extract_content' to get the information.
+            If no, return "no_browser_task".
+
+            User Query: {user_input}
+
+            Response Format:
+            If browser task needed:
+            browser_task: <concise browser task description>
+            needs_browser: yes
+
+            If no browser task needed:
+            needs_browser: no_browser_task
+
+            Example 1:
+            User Query: What technical courses are available on brainlox?
+            Response:
+            browser_task: Go to https://brainlox.com/courses/category/technical and use extract_content to extract all the course names and description, then return it to me as a CourseList
+            needs_browser: yes
+
+            Example 2:
+            User Query: Tell me about python for beginners course.
+            Response:
+            needs_browser: no_browser_task
+
+            Example 3:
+            User Query: Browse brainlox for data science courses and list them
+            Response:
+            browser_task: Go to https://brainlox.com/courses/category/technical and use extract_content to extract all the course names and description related to data science, then return it to me as a CourseList
+            needs_browser: yes
+
+
+            YOUR RESPONSE:
+            """
+            agent_response = self.agent_chat_session.send_message(agent_prompt)
+            agent_text = agent_response.text.strip()
+            logger.info(f"AI Agent Response: {agent_text}")
+
+            if "needs_browser: yes" in agent_text.lower():
+                start_index = agent_text.lower().find("browser_task:") + len("browser_task:")
+                end_index = agent_text.lower().find("needs_browser:", start_index) if "needs_browser:" in agent_text.lower()[start_index:] else len(agent_text) 
+                browser_task_string = agent_text[start_index:end_index].strip()
+                return True, browser_task_string
+            else:
+                return False, None
+
+        except Exception as e:
+            logger.error(f"Error in AI Agent: {e}")
+            return False, None 
+
+
+    @limiter.limit("10/minute")
     def post(self):
-        """Enhanced chat endpoint with session management and dynamic browser tasking - Authentication Removed"""
+        """Enhanced chat endpoint with session management and AI agent for browser task"""
 
         
-        
-        
-        
-
         data = request.get_json()
         user_input = data.get("message", "").strip()
         session_id = data.get("session_id")
@@ -201,42 +268,27 @@ class ChatBot(Resource):
         if not user_input or len(user_input) > 1000:
             return jsonify({"error": "Invalid message format"}), 400
 
-
+        
         if not session_id or session_id not in sessions:
             session_id = str(uuid.uuid4())
             sessions[session_id] = {
-                "chat": intent_model.start_chat(history=[]), 
+                "chat": chatbot_model.start_chat(history=[]), 
                 "history": []
             }
 
         session = sessions[session_id]
 
         try:
-            
-            intent_prompt = f"""Determine if the user query requires using a web browser to find up-to-date information about technical courses on 'https://brainlox.com/courses/category/technical'.
+            needs_browser_task, browser_task = self._determine_browser_task(user_input)
 
-            User Query: {user_input}
+            if needs_browser_task:
+                logger.info(f"Browser task determined by AI Agent: {browser_task}")
 
-            Constraints:
-            - Focus on queries about course information, specifically from brainlox.com.
-            - If the query is about listing courses, finding specific course details, or exploring course categories, it likely requires browsing.
-            - If the query is general knowledge, unrelated to courses, or can be answered from existing knowledge, it does not require browsing.
-            - If browsing is needed, generate a concise browser_task string using 'extract_content' to get relevant course details (title and description). Aim to extract a CourseList. Be specific about the website.
-            - If no browser task is needed, respond with "NO_BROWSER_TASK".
-
-            Response (Browser Task or NO_BROWSER_TASK):
-            """
-
-            intent_response = model.send_message(intent_prompt) 
-            browser_task_string = intent_response.text.strip()
-            logger.info(f"Intent Model Response: {browser_task_string}")
-
-
-            if browser_task_string.lower() != "no_browser_task":
                 
                 queue = Queue()
-                process = Process(target=run_browser_task, args=(browser_task_string, CourseList, queue))
+                process = Process(target=run_browser_task, args=(browser_task, CourseList, queue))
 
+                
                 process.start()
                 process.join(timeout=120)
                 if process.is_alive():
@@ -247,24 +299,26 @@ class ChatBot(Resource):
                 browser_result = queue.get()
 
                 if browser_result:
-                    bot_response = f"Course Information from Browser:\n{browser_result}"
+                    bot_response = f"Course Information:\n{browser_result}"
                 else:
-                     bot_response = "Could not get the course information from the browser."
+                     bot_response = "Could not get the course information from browser."
 
                 session["history"].append((user_input, bot_response))
                 return jsonify({
                  "response": bot_response,
                   "session_id": session_id,
-                   "sources": ["browser"] 
+                   "sources": [] 
                     })
 
-
             else: 
+                logger.info("No browser task needed, proceeding with vector database.")
+                
                 relevant_docs = vector_store.similarity_search(user_input, k=3)
                 context = "\n".join([f"Source: {doc.metadata['source']}\n{doc.page_content}"
                                    for doc in relevant_docs])
 
-                prompt = f"""You are a technical course advisor. Use this context to answer the question:
+                
+                prompt = f"""You are a technical course advisor. Use this context:
                 {context}
 
                 Current conversation:
@@ -273,9 +327,11 @@ class ChatBot(Resource):
                 Question: {user_input}
                 Helpful Answer:"""
 
-                response = session["chat"].send_message(prompt) 
+                
+                response = session["chat"].send_message(prompt)
                 bot_response = response.text
 
+                
                 session["history"].append((user_input, bot_response))
 
                 return jsonify({
@@ -288,12 +344,16 @@ class ChatBot(Resource):
             logger.error(f"Chat error: {e}")
             return jsonify({"error": "Processing error"}), 500
 
+
+
 class HealthCheck(Resource):
     def get(self):
-        return jsonify({"status": "ok", "model": model.model_name})
+        return jsonify({"status": "ok", "model": chatbot_model.model_name}) 
+
 
 api.add_resource(ChatBot, "/chat")
 api.add_resource(HealthCheck, "/health")
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=os.getenv("DEBUG", "false").lower() == "true")
