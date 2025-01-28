@@ -6,6 +6,7 @@ import google.generativeai as genai
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from flask import Flask, request, jsonify
 from flask_restful import Api, Resource
@@ -163,7 +164,7 @@ class CourseList(BaseModel):
 def run_browser_task(task, output_model, queue):
     """Function to run browser task in a separate process."""
     api_key = os.getenv("GEMINI_API_KEY") 
-    llm = ChatGoogleGenerativeAI(model=os.getenv("MODEL_NAME", "gemini-1.5-flash"), api_key=api_key) 
+    llm = ChatGoogleGenerativeAI(model=os.getenv("MODEL_NAME", "gemini-2.0-flash-exp"), api_key=api_key) 
     controller = Controller(output_model=output_model)
     agent = Agent(
         task=task,
