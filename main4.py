@@ -21,8 +21,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Configuration initialization
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-API_KEYS = os.getenv("API_KEYS", "").split(",")
+try:
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    API_KEYS = os.getenv("API_KEYS", "").split(",")
+except Exception as e:
+    logger.error(f"Configuration error: {e}")
+    exit(1)
+
 
 # Model configuration
 generation_config = {
@@ -65,22 +70,25 @@ def load_data(url):
         processed_docs = []
         
         for doc in raw_docs:
-            soup = BeautifulSoup(doc.page_content, 'html.parser')
-            # Custom extraction based on actual website structure
-            courses = soup.find_all('div', class_='course-card')  # Update selector
-            for course in courses:
-                try:
-                    title = course.find('h3').get_text(strip=True)
-                    description = course.find('div', class_='description').get_text(strip=True)
-                    content = f"Course Title: {title}\nDescription: {description}"
-                    processed_docs.append(Document(
-                        page_content=content,
-                        metadata={"source": url, "title": title}
-                    ))
-                except Exception as e:
-                    logger.warning(f"Error processing course: {e}")
-                    continue
-        
+            try:
+                soup = BeautifulSoup(doc.page_content, 'html.parser')
+                # Custom extraction based on actual website structure
+                courses = soup.find_all('div', class_='course-card')  # Update selector
+                for course in courses:
+                    try:
+                        title = course.find('h3').get_text(strip=True)
+                        description = course.find('div', class_='description').get_text(strip=True)
+                        content = f"Course Title: {title}\nDescription: {description}"
+                        processed_docs.append(Document(
+                            page_content=content,
+                            metadata={"source": url, "title": title}
+                        ))
+                    except Exception as e:
+                        logger.warning(f"Error processing course: {e}")
+                        continue
+            except Exception as e:
+                  logger.error(f"Error parsing content {e}")
+                  continue
         logger.info(f"Extracted {len(processed_docs)} courses from {url}")
         return processed_docs
     except Exception as e:
@@ -89,40 +97,52 @@ def load_data(url):
 
 def split_documents(data):
     """Optimal text splitting for technical content"""
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=int(os.getenv("CHUNK_SIZE", 768)),
-        chunk_overlap=int(os.getenv("CHUNK_OVERLAP", 128)),
-        separators=["\n\n", "\n", ". ", "! ", "? ", " ", ""]
-    )
-    return text_splitter.split_documents(data)
+    try:
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=int(os.getenv("CHUNK_SIZE", 768)),
+            chunk_overlap=int(os.getenv("CHUNK_OVERLAP", 128)),
+            separators=["\n\n", "\n", ". ", "! ", "? ", " ", ""]
+        )
+        return text_splitter.split_documents(data)
+    except Exception as e:
+        logger.error(f"Error splitting documents: {e}")
+        raise
 
 def create_vector_store(docs):
     """Vector store with persistence management"""
     persist_dir = "./chroma_db"
-    embeddings = HuggingFaceEmbeddings(
-        model_name=os.getenv("EMBEDDINGS_MODEL", "sentence-transformers/all-mpnet-base-v2")
-    )
+    try:
+         embeddings = HuggingFaceEmbeddings(
+            model_name=os.getenv("EMBEDDINGS_MODEL", "sentence-transformers/all-mpnet-base-v2")
+        )
+         if os.path.exists(persist_dir) and not os.getenv("REFRESH_VECTOR_STORE", "false").lower() == "true":
+            logger.info("Loading existing vector store")
+            return Chroma(persist_directory=persist_dir, embedding_function=embeddings)
     
-    if os.path.exists(persist_dir) and not os.getenv("REFRESH_VECTOR_STORE"):
-        logger.info("Loading existing vector store")
-        return Chroma(persist_directory=persist_dir, embedding_function=embeddings)
-    
-    logger.info("Creating new vector store")
-    vector_store = Chroma.from_documents(
-        documents=docs,
-        embedding=embeddings,
-        persist_directory=persist_dir
-    )
-    vector_store.persist()
-    return vector_store
+         logger.info("Creating new vector store")
+         vector_store = Chroma.from_documents(
+             documents=docs,
+            embedding=embeddings,
+             persist_directory=persist_dir
+        )
+         vector_store.persist()
+         return vector_store
+    except Exception as e:
+        logger.error(f"Error creating or loading vector store: {e}")
+        raise
 
 # Data pipeline execution
-urls = os.getenv("DATA_URLS", "https://brainlox.com/courses/category/technical").split(',')
-all_docs = []
-for url in urls:
-    all_docs.extend(load_data(url.strip()))
-split_docs = split_documents(all_docs)
-vector_store = create_vector_store(split_docs)
+try:
+    urls = os.getenv("DATA_URLS", "https://brainlox.com/courses/category/technical").split(',')
+    all_docs = []
+    for url in urls:
+        all_docs.extend(load_data(url.strip()))
+    split_docs = split_documents(all_docs)
+    vector_store = create_vector_store(split_docs)
+except Exception as e:
+    logger.error(f"Failed to initialize data pipeline: {e}")
+    exit(1)
+
 
 class ChatBot(Resource):
     @limiter.limit("10/minute")
