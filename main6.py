@@ -6,7 +6,6 @@ import google.generativeai as genai
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from flask import Flask, request, jsonify
 from flask_restful import Api, Resource
@@ -35,25 +34,12 @@ except Exception as e:
 
 
 
-generation_config_agent = { 
-  "temperature": 0.5, 
-  "top_p": 0.95,
-  "top_k": 40,
-  "max_output_tokens": 256, 
-}
-
-generation_config_chatbot = { 
-    "temperature": float(os.getenv("TEMPERATURE", 0.7)),
+generation_config_chatbot = {
+    "temperature": float(os.getenv("TEMPERATURE", 0.7)), 
     "top_p": float(os.getenv("TOP_P", 0.95)),
     "top_k": int(os.getenv("TOP_K", 40)),
     "max_output_tokens": int(os.getenv("MAX_OUTPUT_TOKENS", 8192)),
 }
-
-
-agent_model = genai.GenerativeModel(
-  model_name=os.getenv("AGENT_MODEL_NAME", "gemini-2.0-flash-exp"), 
-  generation_config=generation_config_agent,
-)
 
 chatbot_model = genai.GenerativeModel(
     model_name=os.getenv("MODEL_NAME", "gemini-1.5-flash"), 
@@ -164,7 +150,7 @@ class CourseList(BaseModel):
 def run_browser_task(task, output_model, queue):
     """Function to run browser task in a separate process."""
     api_key = os.getenv("GEMINI_API_KEY") 
-    llm = ChatGoogleGenerativeAI(model=os.getenv("MODEL_NAME", "gemini-2.0-flash-exp"), api_key=api_key) 
+    llm = genai.GenerativeModel(model=os.getenv("MODEL_NAME", "gemini-2.0-flash-exp")) 
     controller = Controller(output_model=output_model)
     agent = Agent(
         task=task,
@@ -198,17 +184,18 @@ except Exception as e:
 
 
 class ChatBot(Resource):
-    def __init__(self):
-        self.agent_chat_session = agent_model.start_chat(history=[]) 
-
-    def _determine_browser_task(self, user_input):
+    def _determine_browser_task(self, user_input, session_data): 
         """
-        AI Agent to determine if a browser task is needed and formulate it.
+        LLM to determine if a browser task is needed and formulate it (single LLM approach).
         """
         try:
-            agent_prompt = f"""Determine if the user query requires browsing the web to answer.
-            If yes, formulate a concise browser task using 'extract_content' to get the information.
-            If no, return "no_browser_task".
+            agent_prompt = f"""You are a helpful assistant that can access information from a website using a browser tool.
+            You need to determine if the user query requires browsing the web to answer.
+            If yes, formulate a concise browser task using 'extract_content' to get the information from the website.
+            If no, indicate that no browser task is needed.
+
+            Current Conversation History:
+            {session_data.get('history', [])}
 
             User Query: {user_input}
 
@@ -218,7 +205,7 @@ class ChatBot(Resource):
             needs_browser: yes
 
             If no browser task needed:
-            needs_browser: no_browser_task
+            needs_browser: no
 
             Example 1:
             User Query: What technical courses are available on brainlox?
@@ -229,7 +216,7 @@ class ChatBot(Resource):
             Example 2:
             User Query: Tell me about python for beginners course.
             Response:
-            needs_browser: no_browser_task
+            needs_browser: no
 
             Example 3:
             User Query: Browse brainlox for data science courses and list them
@@ -240,26 +227,27 @@ class ChatBot(Resource):
 
             YOUR RESPONSE:
             """
-            agent_response = self.agent_chat_session.send_message(agent_prompt)
-            agent_text = agent_response.text.strip()
-            logger.info(f"AI Agent Response: {agent_text}")
+            
+            response = sessions[session_data['session_id']]['chat'].send_message(agent_prompt) 
+            agent_text = response.text.strip()
+            logger.info(f"LLM Agent Response: {agent_text}")
 
             if "needs_browser: yes" in agent_text.lower():
                 start_index = agent_text.lower().find("browser_task:") + len("browser_task:")
-                end_index = agent_text.lower().find("needs_browser:", start_index) if "needs_browser:" in agent_text.lower()[start_index:] else len(agent_text) 
+                end_index = agent_text.lower().find("needs_browser:", start_index) if "needs_browser:" in agent_text.lower()[start_index:] else len(agent_text)
                 browser_task_string = agent_text[start_index:end_index].strip()
                 return True, browser_task_string
             else:
                 return False, None
 
         except Exception as e:
-            logger.error(f"Error in AI Agent: {e}")
+            logger.error(f"Error in LLM Agent: {e}")
             return False, None 
 
 
     @limiter.limit("10/minute")
     def post(self):
-        """Enhanced chat endpoint with session management and AI agent for browser task"""
+        """Enhanced chat endpoint with session management and single LLM for browser task"""
 
         
         data = request.get_json()
@@ -278,12 +266,13 @@ class ChatBot(Resource):
             }
 
         session = sessions[session_id]
+        session_data = {"session_id": session_id, "history": session['history']} 
 
         try:
-            needs_browser_task, browser_task = self._determine_browser_task(user_input)
+            needs_browser_task, browser_task = self._determine_browser_task(user_input, session_data) 
 
             if needs_browser_task:
-                logger.info(f"Browser task determined by AI Agent: {browser_task}")
+                logger.info(f"Browser task determined by LLM: {browser_task}")
 
                 
                 queue = Queue()
@@ -308,7 +297,7 @@ class ChatBot(Resource):
                 return jsonify({
                  "response": bot_response,
                   "session_id": session_id,
-                   "sources": [] 
+                   "sources": []
                     })
 
             else: 
