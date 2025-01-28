@@ -148,10 +148,6 @@ class ChatBot(Resource):
     @limiter.limit("10/minute")
     def post(self):
         """Enhanced chat endpoint with session management and context-aware responses"""
-        # Authentication
-        api_key = request.headers.get("X-API-Key")
-        if not api_key or api_key not in API_KEYS:
-            return jsonify({"error": "Unauthorized"}), 401
         
         # Request validation
         data = request.get_json()
