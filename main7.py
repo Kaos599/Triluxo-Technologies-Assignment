@@ -84,11 +84,13 @@ def load_data(url):
     try:
         loader = WebBaseLoader(url)
         raw_docs = loader.load()
-        processed_docs = []
+        logger.info(f"Loaded raw documents from {url}: {len(raw_docs)}") # Log raw docs loaded
 
+        processed_docs = []
         for doc in raw_docs:
             soup = BeautifulSoup(doc.page_content, 'html.parser')
             courses = soup.find_all('div', class_='course-card')
+            logger.info(f"Found {len(courses)} course cards on {url}") # Log course cards found
 
             for course in courses:
                 title = course.find('h3').get_text(strip=True)
@@ -97,9 +99,10 @@ def load_data(url):
                     page_content=f"Course: {title}\nDescription: {description}",
                     metadata={"source": url, "title": title}
                 ))
+        logger.info(f"Processed documents from {url}: {len(processed_docs)}") # Log processed docs
         return processed_docs
     except Exception as e:
-        logger.error(f"Data loading failed: {e}")
+        logger.error(f"Data loading failed for {url}: {e}")
         raise
 
 def create_vector_store(docs):
@@ -123,7 +126,10 @@ def create_vector_store(docs):
 try:
     urls = os.getenv("DATA_URLS", "https://brainlox.com/courses/category/technical").split(',')
     all_docs = [load_data(url.strip()) for url in urls]
-    vector_store = create_vector_store([doc for sublist in all_docs for doc in sublist])
+    logger.info(f"All Docs (before flattening): {[[len(doc_list) for doc_list in all_docs]]}") # Log lengths of doc lists in all_docs
+    flat_docs = [doc for sublist in all_docs for doc in sublist]
+    logger.info(f"Flattened Docs (length): {len(flat_docs)}") # Log length of flattened docs
+    vector_store = create_vector_store(flat_docs)
 except Exception as e:
     logger.error(f"Data pipeline initialization failed: {e}")
     exit(1)
