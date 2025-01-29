@@ -1,0 +1,14 @@
+Flask==3.0.0
+Flask-RESTful==0.3.10
+Flask-Limiter==4.0.0
+Flask-Caching==2.0.2
+langchain==0.1.1
+langchain-community==0.0.14
+langchain-core==0.1.16
+langchain-text-splitters==0.0.1
+google-generativeai==0.3.2
+sentence-transformers==2.2.2
+beautifulsoup4==4.12.3
+python-dotenv==1.0.1
+chromadb==0.4.22
+bs4==0.0.1
