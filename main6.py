@@ -153,6 +153,17 @@ def run_browser_task(task, output_model, queue):
     api_key = os.getenv("GEMINI_API_KEY") 
     llm = ChatGoogleGenerativeAI(model='gemini-2.0-flash-exp', api_key=api_key)
     controller = Controller()
+    browser = Browser(
+	config=BrowserConfig(
+		 firefox_instance_path=r'C:\Program Files\Mozilla Firefox\firefox.exe',
+	)
+)
+    browser_context = BrowserContext(
+	config=BrowserContextConfig(
+		user_agent="foobarfoo"
+	),
+	browser=browser
+)
     agent = Agent(
         task=task,
         llm=llm,
