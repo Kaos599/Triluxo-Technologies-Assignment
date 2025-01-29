@@ -184,6 +184,7 @@ class ChatBot(Resource):
     def post(self):
         """Enhanced chat endpoint with session management and context-aware responses"""
         
+
         data = request.get_json()
         user_input = data.get("message", "").strip()
         session_id = data.get("session_id")
@@ -280,3 +281,7 @@ if __name__ == "__main__":
 
 
 
+    curl -X POST \
+     -H "Content-Type: application/json" \
+     -d '{"message": "What are the courses available"}' \
+     http://localhost:5000/chat
