@@ -16,7 +16,9 @@ from flask_caching import Cache
 from bs4 import BeautifulSoup
 from langchain_core.documents import Document
 import asyncio
-from browser_use import Agent, Controller
+from browser_use import Agent
+from browser_use.browser.browser import Browser, BrowserConfig
+from browser_use.controller.service import Controller
 from multiprocessing import Process, Queue
 from pydantic import BaseModel, Field
 from typing import List
@@ -359,3 +361,6 @@ api.add_resource(HealthCheck, "/health")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=os.getenv("DEBUG", "false").lower() == "true")
+
+
+
